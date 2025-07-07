@@ -323,17 +323,24 @@ COMMAND ACCURACY REQUIREMENTS:
 - Always include proper flags and spacing
 
 SPECIFIC EXAMPLES:
-- "files containing [text]": Use 'grep -r [text] [directory]' (searches file contents)
-- "find files with 'food' in name": Use 'find . -name "*food*"' (searches filenames)
+- "files containing [text]": Use 'grep -r [text] [directory]' (searches file contents, note the keyword 'contains')
+- "find files with 'food' in name": Use 'find . -name "*food*"' (searches filenames, note it doesn't include the keyword 'contains')
 - "find Python files": Use 'find . -name "*.py"' (searches by extension)
+- "create backup of config directory": Use 'tar -czf config_backup_$(date +%Y%m%d).tar.gz config/' (use tar for backups)
 - "show disk usage": Use 'df -h' (shows filesystem usage)
 - "show processes": Use 'ps aux' (shows all processes)
 
 CRITICAL DISTINCTION:
-- If task mentions "containing" or "with content" → use grep to search INSIDE files
-- If task mentions "with X in name" or "named X" → use find to search FILENAMES
-- If task mentions finding a "file type" → use find with -name "*.extension"
+- If task mentions "containing [text]" or "files containing" → use grep to search INSIDE files: grep -r "text" directory
+- If task mentions "with X in name" or "named X" → use find to search FILENAMES: find . -name "*X*"
+- If task mentions file types like "Python files", "log files" → use find with extensions: find . -name "*.py", find . -name "*.log"
 - If task doesn't mention a file extension nor file type → don't assume extensions
+
+COMMON FILE TYPES:
+- Python files → find . -name "*.py"
+- Log files → find . -name "*.log"  
+- Config files → find . -name "*.conf" -o -name "*.config"
+- Text files → find . -name "*.txt"
 
 CRITICAL INSTRUCTIONS:
 1. ALWAYS maintain the original task context throughout the conversation
@@ -349,8 +356,8 @@ EXPLANATION: [detailed explanation of what this command does and why it's approp
 
 EXAMPLE:
 ACTION: Search for files by name pattern
-COMMAND: find . -name "*pattern*" -type f
-EXPLANATION: Uses find to search for files matching the specified pattern in the current directory and subdirectories.
+COMMAND: find . -name "*config*" -type f
+EXPLANATION: Uses find to search for files with 'config' in their name in the current directory and subdirectories.
 
 IMPORTANT RULES:
 1. Provide exactly ONE command per response
