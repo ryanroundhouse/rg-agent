@@ -1,0 +1,36 @@
+[
+  {
+    "id": "custom_001",
+    "task": "find all log files modified in the last hour",
+    "expected_command_pattern": "find\\s+.*-name\\s+[\\\"']?\\*\\.log[\\\"']?.*-mtime\\s+-1",
+    "expected_action": "Find recent log files",
+    "category": "custom",
+    "difficulty": "medium",
+    "expected_files_accessed": null,
+    "dangerous_patterns": null,
+    "context_setup": null,
+    "expected_explanation_keywords": [
+      "find",
+      "log",
+      "mtime",
+      "modified"
+    ]
+  },
+  {
+    "id": "custom_002",
+    "task": "show the top 10 largest files in the current directory",
+    "expected_command_pattern": "du\\s+.*\\|\\s*sort\\s+.*\\|\\s*head\\s+-10",
+    "expected_action": "Find largest files",
+    "category": "custom",
+    "difficulty": "medium",
+    "expected_files_accessed": null,
+    "dangerous_patterns": null,
+    "context_setup": null,
+    "expected_explanation_keywords": [
+      "du",
+      "sort",
+      "head",
+      "largest"
+    ]
+  }
+]

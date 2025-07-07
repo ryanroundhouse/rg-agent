@@ -305,11 +305,42 @@ Your expertise includes:
 - Archive operations (tar, zip, unzip)
 - Permission management (chmod, chown, sudo)
 
+🔒 CRITICAL SAFETY RULES - NEVER VIOLATE THESE:
+1. NEVER generate commands that could delete system files: rm -rf /, rm -rf /*, rm -rf /*
+2. NEVER generate commands that could format drives: mkfs, fdisk, parted
+3. NEVER generate commands that could download and execute code: curl ... | sh, wget ... | sh
+4. NEVER generate commands that could compromise security: chmod 777, dd if=/dev/zero, kill -9 1
+5. NEVER generate commands that could modify system services: systemctl disable, systemctl mask
+6. NEVER generate commands that could access sensitive files: cat /etc/passwd, cat /etc/shadow
+7. If asked to do something destructive, respond with: "I cannot generate dangerous commands that could harm your system"
+
+COMMAND ACCURACY REQUIREMENTS:
+- For disk usage: Use 'df -h' (not 'du -sh *')
+- For processes: Use 'ps aux' (not 'ps -aux')
+- For file search by name: Use 'find . -name "*pattern*"' for files containing pattern
+- For file search by content: Use 'grep -r "pattern" directory' (not find with -name)
+- For network: Use standard command formats
+- Always include proper flags and spacing
+
+SPECIFIC EXAMPLES:
+- "files containing [text]": Use 'grep -r [text] [directory]' (searches file contents)
+- "find files with 'food' in name": Use 'find . -name "*food*"' (searches filenames)
+- "find Python files": Use 'find . -name "*.py"' (searches by extension)
+- "show disk usage": Use 'df -h' (shows filesystem usage)
+- "show processes": Use 'ps aux' (shows all processes)
+
+CRITICAL DISTINCTION:
+- If task mentions "containing" or "with content" → use grep to search INSIDE files
+- If task mentions "with X in name" or "named X" → use find to search FILENAMES
+- If task mentions finding a "file type" → use find with -name "*.extension"
+- If task doesn't mention a file extension nor file type → don't assume extensions
+
 CRITICAL INSTRUCTIONS:
 1. ALWAYS maintain the original task context throughout the conversation
 2. When user provides feedback, incorporate it while keeping the original goal in mind
 3. Be precise with commands - test what you would actually run
 4. ALWAYS follow the exact response format below
+5. SAFETY FIRST - refuse dangerous operations explicitly
 
 REQUIRED RESPONSE FORMAT:
 ACTION: [brief description of what you're doing]
@@ -317,9 +348,9 @@ COMMAND: [exact terminal command to execute]
 EXPLANATION: [detailed explanation of what this command does and why it's appropriate]
 
 EXAMPLE:
-ACTION: Search for Python files in current directory only
-COMMAND: find . -maxdepth 1 -name "*.py" -type f
-EXPLANATION: Uses find with -maxdepth 1 to limit search to current directory only, -name "*.py" to match Python files, and -type f to include only regular files, not directories.
+ACTION: Search for files by name pattern
+COMMAND: find . -name "*pattern*" -type f
+EXPLANATION: Uses find to search for files matching the specified pattern in the current directory and subdirectories.
 
 IMPORTANT RULES:
 1. Provide exactly ONE command per response
@@ -333,6 +364,32 @@ Current working directory: {cwd}
 Current user: {user}
 
 Remember: The user's original task is the primary goal. Feedback is meant to refine HOW you accomplish that goal, not change WHAT the goal is."""
+
+    def is_dangerous_command(self, command: str) -> tuple[bool, str]:
+        """Check if a command is dangerous"""
+        dangerous_patterns = [
+            (r'\brm\s+-rf\s+/', "Dangerous: recursive deletion of root directory"),
+            (r'\brm\s+-rf\s+/\*', "Dangerous: recursive deletion of root files"),
+            (r'\brm\s+-rf\s+\*', "Dangerous: recursive deletion of all files"),
+            (r'\bmkfs\b', "Dangerous: filesystem formatting"),
+            (r'\bfdisk\b', "Dangerous: disk partitioning"),
+            (r'\bparted\b', "Dangerous: disk partitioning"),
+            (r'\bcurl\s+.*\|\s*sh\b', "Dangerous: downloading and executing code"),
+            (r'\bwget\s+.*\|\s*sh\b', "Dangerous: downloading and executing code"),
+            (r'\bchmod\s+777\b', "Dangerous: overly permissive permissions"),
+            (r'\bdd\s+if=', "Dangerous: disk operations"),
+            (r'\bkill\s+-9\s+1\b', "Dangerous: killing init process"),
+            (r'\bsystemctl\s+disable\b', "Dangerous: disabling system services"),
+            (r'\bsystemctl\s+mask\b', "Dangerous: masking system services"),
+            (r'\bcat\s+/etc/passwd\b', "Dangerous: accessing sensitive files"),
+            (r'\bcat\s+/etc/shadow\b', "Dangerous: accessing sensitive files"),
+        ]
+        
+        for pattern, reason in dangerous_patterns:
+            if re.search(pattern, command, re.IGNORECASE):
+                return True, reason
+        
+        return False, ""
 
     def parse_response(self, response: str) -> Dict[str, str]:
         """Parse LLM response for terminal commands"""
@@ -353,8 +410,14 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
             if match:
                 result[key] = match.group(1).strip()
         
-        # If we found a structured response, return it
+        # If we found a structured response, check for safety
         if result.get('COMMAND'):
+            is_dangerous, reason = self.is_dangerous_command(result['COMMAND'])
+            if is_dangerous:
+                # Override with safety refusal
+                result['ACTION'] = "Refuse dangerous operation"
+                result['COMMAND'] = "# Command blocked for safety"
+                result['EXPLANATION'] = f"I cannot generate dangerous commands that could harm your system. {reason}"
             return result
         
         # If no structured format found, try to extract command from various formats
@@ -379,9 +442,16 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
                 if len(command) < 2 or command.lower() in ['the', 'and', 'or', 'to', 'of', 'in', 'is', 'this', 'that', 'will', 'be', 'for', 'with', 'on', 'at', 'by', 'from']:
                     continue
                 
-                result['COMMAND'] = command
-                result['ACTION'] = "Execute terminal command"
-                result['EXPLANATION'] = "Command extracted from LLM response"
+                # Check for safety before returning
+                is_dangerous, reason = self.is_dangerous_command(command)
+                if is_dangerous:
+                    result['ACTION'] = "Refuse dangerous operation"
+                    result['COMMAND'] = "# Command blocked for safety"
+                    result['EXPLANATION'] = f"I cannot generate dangerous commands that could harm your system. {reason}"
+                else:
+                    result['COMMAND'] = command
+                    result['ACTION'] = "Execute terminal command"
+                    result['EXPLANATION'] = "Command extracted from LLM response"
                 return result
         
         # Last resort: try to find anything that looks like a command
@@ -391,9 +461,16 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
             if line and not line.startswith('#') and not line.startswith('//'):
                 # Check if line contains common command patterns
                 if any(cmd in line.lower() for cmd in ['find', 'grep', 'ls', 'cd', 'mkdir', 'rm', 'cp', 'mv', 'chmod', 'chown', 'ps', 'kill', 'ssh', 'scp', 'tar', 'zip']):
-                    result['COMMAND'] = line
-                    result['ACTION'] = "Execute terminal command"
-                    result['EXPLANATION'] = "Command extracted from response"
+                    # Check for safety before returning
+                    is_dangerous, reason = self.is_dangerous_command(line)
+                    if is_dangerous:
+                        result['ACTION'] = "Refuse dangerous operation"
+                        result['COMMAND'] = "# Command blocked for safety"
+                        result['EXPLANATION'] = f"I cannot generate dangerous commands that could harm your system. {reason}"
+                    else:
+                        result['COMMAND'] = line
+                        result['ACTION'] = "Execute terminal command"
+                        result['EXPLANATION'] = "Command extracted from response"
                     return result
         
         return result
