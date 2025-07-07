@@ -77,6 +77,23 @@ rg "check disk usage of all mounted filesystems"
 rg --interactive
 ```
 
+### ⚠️ Important: Always Use Quotes!
+
+Due to shell expansion, **always wrap your commands in quotes** to avoid issues with special characters like `?`, `*`, `[`, `{`, etc.
+
+**❌ This will cause shell expansion errors:**
+```bash
+rg what are the ssh keys I have on my system?
+# Error: zsh: no matches found: system?
+```
+
+**✅ This works correctly:**
+```bash
+rg "what are the ssh keys I have on my system?"
+```
+
+The wrapper script will detect problematic characters and provide helpful guidance when possible.
+
 ### Interactive Feedback System
 
 The key feature is the interactive feedback loop:

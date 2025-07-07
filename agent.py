@@ -51,7 +51,7 @@ class DesktopCommanderClient:
             
             if result.returncode == 0:
                 self.is_connected = True
-                logger.info("Desktop Commander (via npx) is available")
+                logger.debug("Desktop Commander (via npx) is available")
                 return True
             else:
                 logger.warning("npx not available - terminal commands disabled")
@@ -279,7 +279,7 @@ class TerminalAssistant:
         """Initialize the assistant"""
         if await self.mcp_client.connect():
             self.mcp_connected = True
-            logger.info("MCP client initialized successfully")
+            logger.debug("MCP client initialized successfully")
             return True
         else:
             logger.warning("Failed to initialize MCP client")
@@ -403,11 +403,22 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
         if not self.mcp_connected:
             return {"error": "MCP not connected", "success": False}
         
+        # Display proposed command first
         print(f"\n📋 Proposed command: {command}")
+        
+        # Add gap
+        print()
+        
+        # Display LLM analysis
+        print(f"🤔 LLM Analysis:")
+        if action:
+            print(f"   🎯 What: {action}")
+        if explanation:
+            print(f"   💡 Why: {explanation}")
         
         # Get user authorization or feedback
         try:
-            response = input("🔒 Execute this command? (y to execute, anything else for feedback): ").strip()
+            response = input("\n🔒 Execute this command? (y to execute, anything else for feedback): ").strip()
             if response.lower() == 'y':
                 # Execute the command
                 print(f"🔄 Executing: {command}")
@@ -508,13 +519,6 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
                     print("⚠️ No command found in response")
                     print(f"LLM Response: {llm_response}")
                     break
-                
-                # Display what we're doing
-                print(f"\n🤔 LLM Analysis:")
-                if 'ACTION' in parsed:
-                    print(f"   🎯 What: {parsed['ACTION']}")
-                if 'EXPLANATION' in parsed:
-                    print(f"   💡 Why: {parsed['EXPLANATION']}")
                 
                 # Execute the command (or get feedback)
                 command = parsed['COMMAND']
@@ -625,7 +629,8 @@ async def main():
     assistant.ollama_client.model = args.model
     
     # Initialize MCP
-    print("🔧 Initializing terminal assistant...")
+    if args.verbose:
+        print("🔧 Initializing terminal assistant...")
     if not await assistant.initialize():
         print("❌ Failed to initialize MCP connection")
         return

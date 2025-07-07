@@ -1,6 +1,15 @@
 #!/bin/bash
 # RG-Agent wrapper script
 
+# Check if we got arguments and if there are shell expansion issues
+if [[ $# -eq 0 ]]; then
+    echo "Usage: rg \"your terminal task here\""
+    echo "Example: rg \"find all Python files in current directory\""
+    echo "Example: rg \"what are the ssh keys I have on my system?\""
+    echo "Tip: Use quotes to avoid shell expansion issues with special characters"
+    exit 1
+fi
+
 # Get the directory where this script is actually located (resolve symlinks)
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 
@@ -15,6 +24,17 @@ done
 
 # Get the directory containing the actual script
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
+# Check if arguments contain problematic characters and suggest quoting
+for arg in "$@"; do
+    if [[ "$arg" == *"?"* || "$arg" == *"*"* || "$arg" == *"["* || "$arg" == *"{"* ]]; then
+        echo "⚠️  Warning: Your command contains special characters that may cause shell expansion issues."
+        echo "💡 Tip: Try using quotes around your entire command:"
+        echo "   rg \"$*\""
+        echo ""
+        break
+    fi
+done
 
 # Activate the virtual environment and run the agent
 source "$SCRIPT_DIR/venv/bin/activate" && python "$SCRIPT_DIR/agent.py" "$@"
