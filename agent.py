@@ -65,7 +65,8 @@ class DesktopCommanderClient:
     async def disconnect(self):
         """Disconnect from MCP server"""
         self.is_connected = False
-        logger.info("Disconnected from Desktop Commander")
+        if logger.isEnabledFor(logging.INFO):
+            logger.info("Disconnected from Desktop Commander")
     
     async def execute_command(self, command: str, timeout: int = 30, shell: Optional[str] = None) -> Dict[str, Any]:
         """Execute a terminal command via subprocess"""
@@ -268,21 +269,24 @@ class TerminalAssistant:
     Terminal-focused assistant that specializes in system administration and terminal operations
     """
     
-    def __init__(self):
+    def __init__(self, verbose: bool = False):
         self.ollama_client = OllamaClient()
         self.mcp_client = DesktopCommanderClient()
         self.max_iterations = 10  # Reduced for terminal tasks
         self.context_history = []  # Track recent commands and outputs
         self.mcp_connected = False
+        self.verbose = verbose
         
     async def initialize(self):
         """Initialize the assistant"""
         if await self.mcp_client.connect():
             self.mcp_connected = True
-            logger.debug("MCP client initialized successfully")
+            if self.verbose:
+                logger.debug("MCP client initialized successfully")
             return True
         else:
-            logger.warning("Failed to initialize MCP client")
+            if self.verbose:
+                logger.warning("Failed to initialize MCP client")
             return False
     
     async def cleanup(self):
@@ -555,8 +559,9 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
 
     async def handle_terminal_task(self, task: str) -> Dict[str, Any]:
         """Handle a terminal-focused task with feedback loop"""
-        print(f"\n🎯 Terminal Task: {task}")
-        print("=" * 60)
+        if self.verbose:
+            print(f"\n🎯 Terminal Task: {task}")
+            print("=" * 60)
         
         if not self.ollama_client.is_available():
             return {"error": "Ollama is not available", "success": False}
@@ -583,8 +588,9 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
         try:
             while iteration < self.max_iterations:
                 iteration += 1
-                print(f"\n📋 Step {iteration}")
-                print("-" * 30)
+                if self.verbose:
+                    print(f"\n📋 Step {iteration}")
+                    print("-" * 30)
                 
                 # Build current prompt with feedback context
                 if feedback_history:
@@ -593,15 +599,17 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
                 else:
                     current_prompt = f"{base_prompt}\n\nProvide the appropriate terminal command to accomplish this task."
                 
-                print("🧠 Analyzing task...")
+                if self.verbose:
+                    print("🧠 Analyzing task...")
                 llm_response = self.ollama_client.generate(current_prompt, system_prompt)
                 
                 # Parse the response
                 parsed = self.parse_response(llm_response)
                 
                 if not parsed.get('COMMAND'):
-                    print("⚠️ No command found in response")
-                    print(f"LLM Response: {llm_response}")
+                    if self.verbose:
+                        print("⚠️ No command found in response")
+                        print(f"LLM Response: {llm_response}")
                     break
                 
                 # Execute the command (or get feedback)
@@ -614,11 +622,13 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
                     feedback = result.get('feedback', '')
                     feedback_history.append(f"Attempt {iteration}: {command}")
                     feedback_history.append(f"User feedback: {feedback}")
-                    print(f"🔄 Incorporating feedback and trying again...")
+                    if self.verbose:
+                        print(f"🔄 Incorporating feedback and trying again...")
                     continue
                 
                 elif result.get('cancelled'):
-                    print(f"\n🚫 Task cancelled by user")
+                    if self.verbose:
+                        print(f"\n🚫 Task cancelled by user")
                     return {
                         "success": False,
                         "result": "Task cancelled by user",
@@ -638,9 +648,10 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
                             output = output[:200] + "...[truncated]"
                         self.context_history.append(f"Output: {output}")
                     
-                    print(f"\n✅ Task completed successfully!")
-                    if feedback_history:
-                        print(f"📝 Resolved after incorporating {len(feedback_history)//2} rounds of feedback")
+                    if self.verbose:
+                        print(f"\n✅ Task completed successfully!")
+                        if feedback_history:
+                            print(f"📝 Resolved after incorporating {len(feedback_history)//2} rounds of feedback")
                     
                     return {
                         "success": True,
@@ -659,11 +670,12 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
                     self.context_history.append(f"$ {command}")
                     self.context_history.append(f"Error: {error_msg}")
                     
-                    print(f"❌ Command failed:")
-                    print(f"   Return code: {return_code}")
-                    print(f"   Error: {error_msg}")
-                    if output:
-                        print(f"   Output: {output}")
+                    if self.verbose:
+                        print(f"❌ Command failed:")
+                        print(f"   Return code: {return_code}")
+                        print(f"   Error: {error_msg}")
+                        if output:
+                            print(f"   Output: {output}")
                     
                     # Add failure context for next iteration
                     feedback_history.append(f"Attempt {iteration}: {command}")
@@ -672,7 +684,8 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
                         feedback_history.append(f"Command output: {output}")
                     
                     if iteration < self.max_iterations:
-                        print("🔄 Command failed, trying alternative approach...")
+                        if self.verbose:
+                            print("🔄 Command failed, trying alternative approach...")
                         continue
                     else:
                         break
@@ -689,7 +702,8 @@ Remember: The user's original task is the primary goal. Feedback is meant to ref
             
         except Exception as e:
             error_msg = f"Task handling error: {str(e)}"
-            print(f"❌ {error_msg}")
+            if self.verbose:
+                print(f"❌ {error_msg}")
             return {"error": error_msg, "success": False}
 
 async def main():
@@ -707,9 +721,11 @@ async def main():
     
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        logging.getLogger().setLevel(logging.WARNING)  # Hide INFO messages unless verbose
     
     # Initialize assistant
-    assistant = TerminalAssistant()
+    assistant = TerminalAssistant(args.verbose)
     assistant.ollama_client.model = args.model
     
     # Initialize MCP
@@ -768,20 +784,24 @@ async def main():
                     
                     if result["success"]:
                         feedback_rounds = result.get('feedback_rounds', 0)
-                        if feedback_rounds > 0:
-                            print(f"\n🎉 Task completed: {result['result']} (after {feedback_rounds} feedback rounds)")
-                        else:
-                            print(f"\n🎉 Task completed: {result['result']}")
+                        if args.verbose:
+                            if feedback_rounds > 0:
+                                print(f"\n🎉 Task completed: {result['result']} (after {feedback_rounds} feedback rounds)")
+                            else:
+                                print(f"\n🎉 Task completed: {result['result']}")
                     elif result.get("cancelled"):
-                        print(f"\n🚫 Task cancelled: {result['result']}")
+                        if args.verbose:
+                            print(f"\n🚫 Task cancelled: {result['result']}")
                     else:
                         feedback_rounds = result.get('feedback_rounds', 0)
-                        if feedback_rounds > 0:
-                            print(f"\n😞 Task failed: {result['error']} (after {feedback_rounds} feedback rounds)")
-                        else:
-                            print(f"\n😞 Task failed: {result['error']}")
+                        if args.verbose:
+                            if feedback_rounds > 0:
+                                print(f"\n😞 Task failed: {result['error']} (after {feedback_rounds} feedback rounds)")
+                            else:
+                                print(f"\n😞 Task failed: {result['error']}")
                     
-                    print("\n" + "=" * 60)
+                    if args.verbose:
+                        print("\n" + "=" * 60)
                     
                 except KeyboardInterrupt:
                     print("\n\n👋 Goodbye!")
@@ -805,19 +825,22 @@ async def main():
             
             if result["success"]:
                 feedback_rounds = result.get('feedback_rounds', 0)
-                if feedback_rounds > 0:
-                    print(f"\n🎉 Task completed: {result['result']} (after {feedback_rounds} feedback rounds)")
-                else:
-                    print(f"\n🎉 Task completed: {result['result']}")
+                if args.verbose:
+                    if feedback_rounds > 0:
+                        print(f"\n🎉 Task completed: {result['result']} (after {feedback_rounds} feedback rounds)")
+                    else:
+                        print(f"\n🎉 Task completed: {result['result']}")
             elif result.get("cancelled"):
-                print(f"\n🚫 Task cancelled: {result['result']}")
+                if args.verbose:
+                    print(f"\n🚫 Task cancelled: {result['result']}")
                 sys.exit(2)  # Different exit code for cancellation
             else:
                 feedback_rounds = result.get('feedback_rounds', 0)
-                if feedback_rounds > 0:
-                    print(f"\n😞 Task failed: {result['error']} (after {feedback_rounds} feedback rounds)")
-                else:
-                    print(f"\n😞 Task failed: {result['error']}")
+                if args.verbose:
+                    if feedback_rounds > 0:
+                        print(f"\n😞 Task failed: {result['error']} (after {feedback_rounds} feedback rounds)")
+                    else:
+                        print(f"\n😞 Task failed: {result['error']}")
                 sys.exit(1)
                 
     finally:
